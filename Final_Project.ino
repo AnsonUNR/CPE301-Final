@@ -10,14 +10,30 @@
 
 #define DHT11_PIN 7
 
+//ADC Variables
 volatile unsigned char* my_ADMUX = (unsigned char*) 0x7C;
 volatile unsigned char* my_ADCSRB = (unsigned char*) 0x7B;
 volatile unsigned char* my_ADCSRA = (unsigned char*) 0x7A;
 volatile unsigned int* my_ADC_DATA = (unsigned int*) 0x78;
 
+//Digital Input/Output Variables
 volatile unsigned char* port_b = (unsigned char*) 0x25; 
 volatile unsigned char* ddr_b  = (unsigned char*) 0x24; 
 volatile unsigned char* pin_b  = (unsigned char*) 0x23;
+
+volatile unsigned char* port_l = (unsigned char*) 0x10B; 
+volatile unsigned char* ddr_l  = (unsigned char*) 0x10A; 
+volatile unsigned char* pin_l  = (unsigned char*) 0x109;
+
+volatile unsigned char* port_g = (unsigned char*) 0x34; 
+volatile unsigned char* ddr_g  = (unsigned char*) 0x33; 
+volatile unsigned char* pin_g  = (unsigned char*) 0x32;
+
+volatile unsigned char* port_a = (unsigned char*) 0x22; 
+volatile unsigned char* ddr_a  = (unsigned char*) 0x21; 
+volatile unsigned char* pin_a  = (unsigned char*) 0x20;
+
+
 
 const int stepsPerRevolution = 2038;
 
@@ -42,17 +58,17 @@ void setup() {
   *ddr_b &= 0xFD;
 
   //CHANGE THESE TO NOT USE THE LIBRARY
-  pinMode(39, OUTPUT); //Blue
-  pinMode(41, OUTPUT); // RED
-  pinMode(43, OUTPUT); //GREEN
-  pinMode(45, OUTPUT); //YEllow
+  *ddr_g |= 0x04; //Blue LED Pin 39/PG2 output
+  *ddr_g |= 0x01; // RED LED Pin 41/PG0 output
+  *ddr_l |= 0x40; //GREEN LED Pin 43/PL6 output
+  *ddr_l |= 0x10; //YEllow LED Pin 45/PL4 output
 
-  pinMode(52, INPUT); //right
-  pinMode(50, INPUT); //left
-  pinMode(48, INPUT); //reset
-  pinMode(46, INPUT); //on and off
+  *ddr_b &= 0xFD; //right button Pin 52/PB1 input
+  *ddr_b &= 0xF7; //left button Pin 50/PB3 input
+  *ddr_l &= 0xFD; //reset button Pin 48/PL1 input
+  *ddr_l &= 0xF7; //on and off button Pin 46/PL3 input
 
-  pinMode(24, OUTPUT); //fan
+  *ddr_a |= 0x04;; //fan/motor Pin 24/PA2 output
 
   
 }
@@ -103,25 +119,29 @@ void loop() {
   delay(1000);
 
   //Button and LED test code
-  if(digitalRead(52) == HIGH)
+  if(*pin_b & 0x02) //if pin 52 is high
     Serial.println("right pressed");
-  if(digitalRead(50) == HIGH)
+  if(*pin_b & 0x08) //if pin 50 is high
     Serial.println("left pressed");
-  if(digitalRead(48) == HIGH)
+  if(*pin_l & 0x02) //if pin 48 is high
     Serial.println("reset pressed");
-  if(digitalRead(46) == HIGH){
+  if(*pin_l & 0x08){ //if pin 46 is high
     Serial.println("on/off pressed");
     fan_state = 1 - fan_state;
-    digitalWrite(24, fan_state);
+    if(fan_state == 1)
+      *port_a |= 0x04;
+    else
+      *port_a &= 0xFB;
+    
   }
     
 
 
   //all LEDs on
-  digitalWrite(39, HIGH);
-  digitalWrite(41, HIGH);
-  digitalWrite(43, HIGH);
-  digitalWrite(45, HIGH);
+  *port_g |= 0x04; //blue
+  *port_g |= 0x01;; //red
+  *port_l |= 0x40; //green
+  *port_l |= 0x10; //yellow
   
 
   
