@@ -52,11 +52,7 @@ volatile unsigned char* port_d = (unsigned char*) 0x2B;
 volatile unsigned char* ddr_d  = (unsigned char*) 0x2A; 
 volatile unsigned char* pin_d  = (unsigned char*) 0x29;
 
-
-
-const int stepsPerRevolution = 1;
-
-Stepper myStepper = Stepper(stepsPerRevolution, 31, 35, 33, 37);
+Stepper myStepper = Stepper(200, 31, 35, 33, 37);
 
 
 dht DHT; 
@@ -69,12 +65,12 @@ volatile int fan_state = 0;
 int cooler_state = DISABLED;
 int previous_state = DISABLED;
 
-int tempThreshold = 24;
+int tempThreshold = 23;
 int waterThreshold = 50;
 unsigned int water_level;
 
 unsigned long previousMillis = 0;
-const long interval = 60000;
+const long interval = 20000;
 
 void setup() {
   // put your setup code here, to run once:
@@ -84,7 +80,7 @@ void setup() {
   //initialize the ADC for the Water Level Sensor
   adc_init();
 
-  myStepper.setSpeed(10); //Sets stepper speed
+  myStepper.setSpeed(20); //Sets stepper speed
 
   //INPUT and OUTPUT
   *ddr_g |= 0x04; //Blue LED Pin 39/PG2 output
@@ -112,6 +108,7 @@ void loop() {
     if(previous_state != DISABLED){
       reportTransition();
       previous_state = DISABLED;
+      lcd.clear();
     }
       
     
@@ -121,19 +118,16 @@ void loop() {
     *port_l |= 0x10; //yellow on
 
     fan_state = 0;
-    lcd.clear();
-
-    /*if(*pin_d & 0x04){
-      cooler_state = IDLE;
-      delay(1000);
-    } //polling version of start button*/
   }
 
   //IDLE State
   else if(cooler_state == IDLE){
     if(previous_state != IDLE){
       reportTransition();
+      if(previous_state != RUNNING)
+        reportDHT();
       previous_state = IDLE;
+      
     }
 
     *port_g &= 0xFB; //blue off
@@ -150,11 +144,12 @@ void loop() {
     
     else if(DHT.temperature > tempThreshold){
       cooler_state = RUNNING;
+      reportDHT();
     }
 
     if(*pin_l & 0x08){//if off button (pin46) is high
       cooler_state = DISABLED;
-      delay(1000);
+      
     } 
     
   }
@@ -164,6 +159,7 @@ void loop() {
     if(previous_state != ERROR){
       reportTransition();
       previous_state = ERROR;
+      lcd.clear();
     }
 
     *port_g &= 0xFB; //blue off
@@ -176,13 +172,14 @@ void loop() {
     if(*pin_l & 0x02){ //if pin 48 (RESET) is high
       if(water_level > waterThreshold){
         cooler_state = IDLE;
+        
+        reportDHT();
       }
     }
     if(*pin_l & 0x08){//if off button (pin46) is high
       cooler_state = DISABLED;
-      delay(1000);
+      
     }
-    //LCD should ERROR
   }
 
   //RUNNING State
@@ -190,6 +187,7 @@ void loop() {
     if(previous_state != RUNNING){
       reportTransition();
       previous_state = RUNNING;
+      
     }
 
     *port_g |= 0x04; //blue on
@@ -206,12 +204,12 @@ void loop() {
     
     else if(DHT.temperature <= tempThreshold){
       cooler_state = IDLE;
+      reportDHT();
     }
     if(*pin_l & 0x08){//if off button (pin46) is high
       cooler_state = DISABLED;
-      delay(1000);
+      
     }
-
     
   }
 
@@ -220,109 +218,42 @@ void loop() {
   if(cooler_state != DISABLED){
     if(currentMillis - previousMillis >= interval){
       previousMillis = currentMillis;
-      //lcd.clear();
       if(cooler_state != ERROR){
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.write("Temp:");
-        lcd.print(DHT.temperature);
-        lcd.setCursor(0, 1);
-        lcd.write("Humidity:");
-        lcd.print(DHT.humidity);
+        
+        reportDHT();
       }
       
     }
     //print error message if water level is too low
     if(cooler_state == ERROR){
-        lcd.clear();
+        
         lcd.setCursor(0, 0);
-        lcd.write("Error. Water Level too low.");
+        lcd.write("Error:Water Low.");
       }
-    
-
-    //stepper motor
-    while(*pin_b & 0x02){ //while pin 52(right) is high
-      myStepper.step(stepsPerRevolution);
-    }
-    while(*pin_b & 0x08) //while pin 50(left) is high
-      myStepper.step(-stepsPerRevolution);
     }
   
+  bool movedRight=false;
+  bool movedLeft=false;
+  //stepper motor
+  while(*pin_b & 0x02){ //while pin 52(right) is high
+    myStepper.step(-1);
+    movedRight = true;
+  }
+  if(movedRight){
+    printMessage("Vent Moved Clockwise\n");
+  }
+  while(*pin_b & 0x08){ //while pin 50(left) is high
+    myStepper.step(1);
+    movedLeft = true;
+  }
+  if(movedLeft){
+    printMessage("Vent Moved Counter Clockwise\n");
+  }
 
   if(fan_state == 1)
     *port_a |= 0x04;
   else
     *port_a &= 0xFB;
-
-  
-  //RTC test
-  
-  /*tmElements_t time;
-  RTC.read(time);
-  Serial.print("time: ");
-  Serial.print(time.Hour);
-  Serial.print(":");
-  Serial.print(time.Minute);
-  Serial.print(":");
-  Serial.println(time.Second); */
-
-  //Water sensor test code
-  /*unsigned int water_level = adc_read(0);
-  Serial.print("Water Level: ");
-  Serial.println(water_level);*/
-
-
-  //Stepper sample code
-  /*
-  myStepper.setSpeed(5);
-  //myStepper.step(stepsPerRevolution);
-  delay(1000);
-  // Rotate CCW quickly at 10 RPM
-  myStepper.setSpeed(10);
-  //myStepper.step(-stepsPerRevolution);
-  delay(1000);*/
-
-  //DHT humidity and temp sample code
-  /*
-  int chk = DHT.read11(DHT11_PIN);
-  Serial.print("Temperature=");
-  Serial.println(DHT.temperature);
-  //Serial.print("Humidity=");
-  //Serial.println(DHT.humidity);
-  delay(1000);*/
-
-  //lcd test code
-  
-  /*lcd.setCursor(0, 0);
-  lcd.write("test");
-  delay(1000);*/
-
-  /*//Button and LED test code
-  if(*pin_b & 0x02) //if pin 52 is high
-    Serial.println("right pressed");
-  if(*pin_b & 0x08) //if pin 50 is high
-    Serial.println("left pressed");
-  if(*pin_l & 0x02) //if pin 48 is high
-    Serial.println("reset pressed");*/
-
-    
-
-  /*
-  //all LEDs on
-  *port_g |= 0x04; //blue on
-  *port_g |= 0x01; //red on
-  *port_l |= 0x40; //green on
-  *port_l |= 0x10; //yellow on
-  
-  //LEDs off
-  *port_g &= 0xFB; //blue off
-  *port_g &= 0xFE; //red off
-  *port_l &= 0xBF; //green off
-  *port_l &= 0xEF; //yellow off
-  */
-  
-    //Turns the fan on or off depending on its state
-    
   
 }
 
@@ -332,6 +263,18 @@ void startButtonISR(){
         cooler_state = IDLE;
       }
     }
+}
+
+void reportDHT(){
+  
+  lcd.clear();
+  DHT.read11(DHT11_PIN);
+  lcd.setCursor(0, 0);
+  lcd.write("T:");
+  lcd.print(DHT.temperature);
+  //lcd.setCursor(0, 1); //uncomment this if you want Humidity on its own line
+  lcd.write(" H:");
+  lcd.print(DHT.humidity);
 }
 
 void reportTransition(){
@@ -345,29 +288,29 @@ void reportTransition(){
     printMessage(" on ");
 
     unsigned char month[2];
-    sprintf(month, "%x", time.Month);
+    sprintf(month, "%u", time.Month);
     printMessage(month);
     printMessage("/");
     unsigned char day[2];
-    sprintf(day, "%x", time.Day);
+    sprintf(day, "%u", time.Day);
     printMessage(day);
     printMessage("/");
     unsigned char year[4];
-    sprintf(year, "%x", time.Year);
+    sprintf(year, "%u", tmYearToCalendar(time.Year));
     printMessage(year);
 
     printMessage(" at ");
 
     unsigned char hour[2];
-    sprintf(hour, "%x", time.Hour);
+    sprintf(hour, "%02u", time.Hour);
     printMessage(hour);
     printMessage(":");
     unsigned char minute[2];
-    sprintf(minute, "%x", time.Minute);
+    sprintf(minute, "%02u", time.Minute);
     printMessage(minute);
     printMessage(":");
     unsigned char second[2];
-    sprintf(second, "%x", time.Second);
+    sprintf(second, "%02u", time.Second);
     printMessage(second);
     U0putchar('\n');
     
