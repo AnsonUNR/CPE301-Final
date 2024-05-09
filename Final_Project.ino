@@ -65,12 +65,12 @@ volatile int fan_state = 0;
 int cooler_state = DISABLED;
 int previous_state = DISABLED;
 
-int tempThreshold = 23;
+int tempThreshold = 24;
 int waterThreshold = 50;
 unsigned int water_level;
 
 unsigned long previousMillis = 0;
-const long interval = 20000;
+const long interval = 60000;
 
 void setup() {
   // put your setup code here, to run once:
